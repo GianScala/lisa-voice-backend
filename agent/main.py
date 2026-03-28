@@ -69,13 +69,18 @@ def build_system_prompt(persona: dict, language: str) -> str:
     parts.append(persona["system_prompt"])
     parts.append(
         "DEFAULT MISSED-CALL ASSISTANT WORKFLOW:\n"
-        "- Act like a proactive AI assistant for a small business, not a passive voicemail.\n"
-        "- Greet the caller with the business name and ask what they need.\n"
-        "- Collect the caller's name, callback details, and the most useful lead information for the business.\n"
-        "- Keep replies friendly, concise, and professional.\n"
-        "- Confirm the key details back clearly for the owner.\n"
-        "- Tell the caller the team will get back to them as soon as possible.\n"
+        "- Act like a proactive front-desk assistant for a small business, not a passive voicemail.\n"
+        "- Never say the owner is unavailable, never ask the caller to leave a message, and never frame yourself as only a placeholder.\n"
+        "- Start strong: greet with the business name and position yourself as actively helping get the issue handled quickly.\n"
+        "- Ask what the caller needs in a simple, natural way.\n"
+        "- Guide the conversation forward with calm confidence.\n"
+        "- Say things like: 'I can help get this taken care of quickly,' 'Let me grab a couple details so we can move fast,' and 'I'll make sure the team gets this right away.'\n"
+        "- Collect the caller's name, what they need, urgency when relevant, and callback details if needed.\n"
+        "- Confirm the key details back clearly so the handoff feels already in motion.\n"
+        "- Reassure with confident but realistic language such as 'Perfect — I've got everything I need' and 'I'll pass this to the team right away so they can follow up as soon as possible.'\n"
         "- Only offer a booking link after you have collected the important details.\n"
+        "- Close cleanly: thank the caller by name when possible and reinforce that the team will be in touch shortly.\n"
+        "- Do not mention AI.\n"
         "- Never invent pricing, availability, policies, or actions already taken.\n"
         "- If information is missing, say the team will follow up with specifics."
     )
@@ -106,7 +111,9 @@ def build_system_prompt(persona: dict, language: str) -> str:
 
 def build_intro_instruction(persona: dict, user_name: str, language: str) -> str:
     base_intro = persona["intro_message"].format(
-        user_name=user_name, agent_name=persona["agent_name"]
+        user_name=user_name,
+        agent_name=persona["agent_name"],
+        business_name=persona.get("name", "the business"),
     )
     if language == "en":
         return f"Greet the user by saying: {base_intro}"

@@ -108,8 +108,13 @@ async def create_customer(request: CreateCustomerRequest):
         voice=request.voice,
         language=request.language,
         system_prompt=request.system_prompt or "",
-        intro_message=request.intro_message or "Hello {user_name}! I'm {agent_name}. How can I help?",
-        goodbye_message=request.goodbye_message or "Thanks for calling. We will follow up as soon as possible.",
+        intro_message=request.intro_message or (
+            "Hi, this is {agent_name}, helping with {business_name}. "
+            "I can help get this taken care of quickly. What do you need help with today?"
+        ),
+        goodbye_message=request.goodbye_message or (
+            "Perfect — I've got everything I need. We'll follow up as soon as possible. Thanks for calling."
+        ),
         business_category=request.business_category,
         service_area=request.service_area,
         business_hours=request.business_hours,
