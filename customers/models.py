@@ -16,18 +16,23 @@ from typing import Dict, List, Optional
 @dataclass
 class CustomerConfig:
     name: str
-    agent_name: str = "Lisa"
-    agent_type: str = "lisa"
+    agent_name: str = "Assistant"
+    agent_type: str = "general_business"
     voice: str = "eve"
     language: str = "en"
 
     system_prompt: str = ""
     intro_message: str = "Hello {user_name}! I'm {agent_name}. How can I help?"
-    goodbye_message: str = "Goodbye! Have a great day."
+    goodbye_message: str = "Thanks for calling. We will follow up as soon as possible."
 
+    business_category: Optional[str] = None
+    service_area: Optional[str] = None
     business_hours: Optional[str] = None
     business_address: Optional[str] = None
     services: List[str] = field(default_factory=list)
+    common_customer_questions: List[str] = field(default_factory=list)
+    booking_link_enabled: bool = False
+    booking_link_url: Optional[str] = None
 
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     is_active: bool = True
@@ -37,12 +42,30 @@ class CustomerConfig:
         parts = [self.system_prompt] if self.system_prompt else [
             f"You are {self.agent_name}, a helpful voice assistant for {self.name}."
         ]
+        parts.append(
+            "Handle missed calls like an active small-business assistant: greet callers with the "
+            "business name, ask what they need, collect useful lead details, summarize the request "
+            "clearly for the owner, and reassure the caller that the team will follow up soon."
+        )
+        if self.business_category:
+            parts.append(f"Business category: {self.business_category}.")
         if self.services:
             parts.append(f"Services: {', '.join(self.services)}.")
+        if self.service_area:
+            parts.append(f"Service area: {self.service_area}.")
         if self.business_hours:
             parts.append(f"Hours: {self.business_hours}.")
         if self.business_address:
             parts.append(f"Address: {self.business_address}.")
+        if self.common_customer_questions:
+            parts.append(
+                f"Common customer questions: {', '.join(self.common_customer_questions)}."
+            )
+        if self.booking_link_enabled and self.booking_link_url:
+            parts.append(
+                "Booking link available after collecting details: "
+                f"{self.booking_link_url}."
+            )
         return "\n\n".join(parts)
 
     def get_intro(self, user_name: Optional[str] = None) -> str:
@@ -59,6 +82,9 @@ class CustomerConfig:
             "agent_type": self.agent_type,
             "voice": self.voice,
             "language": self.language,
+            "business_category": self.business_category,
+            "service_area": self.service_area,
+            "booking_link_enabled": self.booking_link_enabled,
             "is_active": self.is_active,
             "created_at": self.created_at,
         }

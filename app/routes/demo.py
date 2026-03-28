@@ -31,7 +31,7 @@ router = APIRouter(prefix="/api/demo", tags=["demo"])
 
 class CreateSessionRequest(BaseModel):
     name: str
-    customer_id: str = "demo"
+    customer_id: str = "home_services"
     language: str = "en"              # ← from frontend language selector
 
 

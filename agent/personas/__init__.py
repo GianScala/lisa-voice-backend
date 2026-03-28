@@ -17,7 +17,7 @@ from typing import Dict, Optional
 
 logger = logging.getLogger("agent.personas")
 
-# All loaded personas: { "demo": {...}, "dental": {...} }
+# All loaded personas keyed by persona id.
 _registry: Dict[str, dict] = {}
 
 

@@ -38,15 +38,20 @@ class CustomerStore:
                 id=persona["id"],
                 name=persona["name"],
                 agent_name=persona["agent_name"],
-                agent_type=persona.get("agent_type", "lisa"),
+                agent_type=persona.get("agent_type", "general_business"),
                 voice=persona.get("voice", "eve"),
                 language=persona.get("language", "en"),
                 system_prompt=persona.get("system_prompt", ""),
                 intro_message=persona.get("intro_message", "Hello!"),
                 goodbye_message=persona.get("goodbye_message", "Goodbye!"),
+                business_category=persona.get("business_category"),
+                service_area=persona.get("service_area"),
                 business_hours=persona.get("business_hours"),
                 business_address=persona.get("business_address"),
                 services=persona.get("services", []),
+                common_customer_questions=persona.get("common_customer_questions", []),
+                booking_link_enabled=persona.get("booking_link_enabled", False),
+                booking_link_url=persona.get("booking_link_url"),
             )
         logger.info(f"Loaded {len(self._customers)} customers from persona files")
 

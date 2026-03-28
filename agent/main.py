@@ -51,6 +51,9 @@ def get_language_name(code: str) -> str:
     return LANGUAGE_NAMES.get(code, code)
 
 
+DEFAULT_PERSONA_ID = "home_services"
+
+
 # =============================================================================
 # Build prompts
 # =============================================================================
@@ -64,13 +67,39 @@ def build_system_prompt(persona: dict, language: str) -> str:
             f"Never switch to English unless the user explicitly asks you to."
         )
     parts.append(persona["system_prompt"])
+    parts.append(
+        "DEFAULT MISSED-CALL ASSISTANT WORKFLOW:\n"
+        "- Act like a proactive AI assistant for a small business, not a passive voicemail.\n"
+        "- Greet the caller with the business name and ask what they need.\n"
+        "- Collect the caller's name, callback details, and the most useful lead information for the business.\n"
+        "- Keep replies friendly, concise, and professional.\n"
+        "- Confirm the key details back clearly for the owner.\n"
+        "- Tell the caller the team will get back to them as soon as possible.\n"
+        "- Only offer a booking link after you have collected the important details.\n"
+        "- Never invent pricing, availability, policies, or actions already taken.\n"
+        "- If information is missing, say the team will follow up with specifics."
+    )
 
+    if category := persona.get("business_category"):
+        parts.append(f"Business category: {category}.")
     if services := persona.get("services"):
         parts.append(f"Services offered: {', '.join(services)}.")
+    if service_area := persona.get("service_area"):
+        parts.append(f"Service area: {service_area}.")
     if hours := persona.get("business_hours"):
         parts.append(f"Business hours: {hours}.")
     if address := persona.get("business_address"):
         parts.append(f"Located at: {address}.")
+    if questions := persona.get("common_customer_questions"):
+        parts.append(
+            "Common customer questions to help with: "
+            f"{', '.join(questions)}."
+        )
+    if persona.get("booking_link_enabled") and persona.get("booking_link_url"):
+        parts.append(
+            "Optional booking link for callers after details are collected: "
+            f"{persona['booking_link_url']}."
+        )
 
     return "\n\n".join(parts)
 
@@ -124,7 +153,7 @@ async def entrypoint(ctx: agents.JobContext):
         logger.warning("⚠️ No remote participant joined within 15s; continuing anyway.")
 
     # ── Read metadata ───────────────────────────────────────────────────────
-    customer_id = "demo"
+    customer_id = DEFAULT_PERSONA_ID
     user_name = "there"
     session_id = "unknown"
     language = "en"
@@ -138,7 +167,7 @@ async def entrypoint(ctx: agents.JobContext):
         if getattr(p, "metadata", None):
             try:
                 meta = json.loads(p.metadata)
-                customer_id = meta.get("customer_id", "demo")
+                customer_id = meta.get("customer_id", DEFAULT_PERSONA_ID)
                 user_name = meta.get("name", "there")
                 session_id = meta.get("session_id", "unknown")
                 language = meta.get("language", "en")
@@ -149,7 +178,7 @@ async def entrypoint(ctx: agents.JobContext):
     logger.info(f"📋 customer={customer_id}, user={user_name}, session={session_id}, lang={language}")
 
     # ── Load persona ────────────────────────────────────────────────────────
-    persona = get_persona(customer_id) or get_persona("demo")
+    persona = get_persona(customer_id) or get_persona(DEFAULT_PERSONA_ID)
     voice = persona["voice"]
     agent_name = persona["agent_name"]
     instructions = build_system_prompt(persona, language)
