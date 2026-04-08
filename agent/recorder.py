@@ -2,7 +2,8 @@
 Session Recorder (TRANSCRIPT-ONLY)
 ==================================
 Saves ONLY the full transcript (both sides) to local files.
-No audio recording.
+Also publishes transcript entries to the LiveKit room data channel
+so the frontend can display them in real time.
 
 Output structure:
   recordings/
@@ -13,6 +14,7 @@ Output structure:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -43,6 +45,7 @@ class SessionRecorder:
         agent_name: str,
         language: str = "en",
         save_metadata: bool = True,
+        room=None,
     ):
         self.session_id = session_id
         self.customer_id = customer_id
@@ -50,6 +53,7 @@ class SessionRecorder:
         self.agent_name = agent_name
         self.language = language
         self.save_metadata = save_metadata
+        self.room = room
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.output_dir = RECORDINGS_DIR / f"{customer_id}_{session_id}_{timestamp}"
@@ -59,6 +63,26 @@ class SessionRecorder:
         self._started_at = datetime.now()
 
         logger.info(f"📝 Transcript recorder ready → {self.output_dir}")
+
+    # ── Publish transcript entry to LiveKit data channel ──────────────────
+
+    def _publish_to_room(self, role: str, text: str) -> None:
+        """Publish a transcript entry to the LiveKit room so the frontend can display it."""
+        if not self.room:
+            return
+        try:
+            payload = json.dumps({
+                "type": "transcript",
+                "role": role,
+                "text": text,
+                "timestamp": datetime.now().isoformat(),
+            }).encode("utf-8")
+            loop = asyncio.get_running_loop()
+            loop.create_task(
+                self.room.local_participant.publish_data(payload, reliable=True)
+            )
+        except Exception:
+            logger.debug("Could not publish transcript to data channel", exc_info=True)
 
     # ── Session-level: capture transcript ───────────────────────────────────
 
@@ -79,6 +103,7 @@ class SessionRecorder:
                         timestamp=datetime.now().isoformat(),
                     )
                 )
+                self._publish_to_room("user", text)
                 logger.debug(f"📝 User: {text[:120]}")
 
         @session.on("agent_speech_committed")
@@ -101,6 +126,7 @@ class SessionRecorder:
                     timestamp=datetime.now().isoformat(),
                 )
             )
+            self._publish_to_room("agent", text)
             logger.debug(f"📝 Agent: {text[:120]}")
 
     # ── Save transcript (and optional metadata) ─────────────────────────────

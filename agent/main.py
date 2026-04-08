@@ -205,7 +205,8 @@ async def entrypoint(ctx: agents.JobContext):
         user_name=user_name,
         agent_name=agent_name,
         language=language,
-        save_metadata=True,   # set False if you want transcript only
+        save_metadata=True,
+        room=ctx.room,
     )
 
     # ── Start session ───────────────────────────────────────────────────────
