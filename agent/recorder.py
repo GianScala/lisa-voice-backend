@@ -66,7 +66,7 @@ class SessionRecorder:
 
     # ── Publish transcript entry to LiveKit data channel ──────────────────
 
-    def _publish_to_room(self, role: str, text: str) -> None:
+    def _publish_to_room(self, role: str, text: str, action: str = "add") -> None:
         """Publish a transcript entry to the LiveKit room so the frontend can display it."""
         if not self.room:
             return
@@ -75,6 +75,7 @@ class SessionRecorder:
                 "type": "transcript",
                 "role": role,
                 "text": text,
+                "action": action,
                 "timestamp": datetime.now().isoformat(),
             }).encode("utf-8")
             loop = asyncio.get_running_loop()
@@ -84,6 +85,12 @@ class SessionRecorder:
         except Exception:
             logger.debug("Could not publish transcript to data channel", exc_info=True)
 
+    def _last_entry_by_role(self, role: str) -> TranscriptEntry | None:
+        for entry in reversed(self._transcript):
+            if entry.role == role:
+                return entry
+        return None
+
     # ── Session-level: capture transcript ───────────────────────────────────
 
     def attach_to_session(self, session) -> None:
@@ -91,11 +98,21 @@ class SessionRecorder:
 
         @session.on("user_input_transcribed")
         def _on_user_speech(ev):
-            # Only store final segments to avoid partial duplicates
-            if getattr(ev, "is_final", False):
-                text = (getattr(ev, "transcript", None) or "").strip()
-                if not text:
-                    return
+            if not getattr(ev, "is_final", False):
+                return
+            text = (getattr(ev, "transcript", None) or "").strip()
+            if not text:
+                return
+
+            # Deduplicate: if new text is a superset of the last user entry,
+            # replace it instead of adding a new one (STT sends incremental finals)
+            last = self._last_entry_by_role("user")
+            if last and (text.startswith(last.text) or last.text.startswith(text)):
+                last.text = text
+                last.timestamp = datetime.now().isoformat()
+                self._publish_to_room("user", text, action="replace")
+                logger.debug(f"📝 User (updated): {text[:120]}")
+            else:
                 self._transcript.append(
                     TranscriptEntry(
                         role="user",
@@ -103,31 +120,74 @@ class SessionRecorder:
                         timestamp=datetime.now().isoformat(),
                     )
                 )
-                self._publish_to_room("user", text)
+                self._publish_to_room("user", text, action="add")
                 logger.debug(f"📝 User: {text[:120]}")
 
-        @session.on("agent_speech_committed")
-        def _on_agent_speech(ev):
-            # Different SDKs sometimes shape this differently
-            text = ""
-            if hasattr(ev, "content") and isinstance(ev.content, str):
-                text = ev.content
-            else:
-                text = str(ev)
+        @session.on("conversation_item_added")
+        def _on_conversation_item(ev):
+            message = ev.item
+            role = getattr(message, "role", None)
+            logger.info(f"📨 conversation_item_added: role={role}")
 
-            text = (text or "").strip()
-            if not text:
+            if role != "assistant":
                 return
 
-            self._transcript.append(
-                TranscriptEntry(
-                    role="agent",
-                    text=text,
-                    timestamp=datetime.now().isoformat(),
-                )
+            text = self._extract_text(message)
+            if text:
+                self._add_agent_entry(text)
+
+        def _debug_events(name: str):
+            """Register a catch-all debug listener."""
+            @session.on(name)
+            def _handler(ev):
+                logger.info(f"🔍 Event '{name}': {type(ev).__name__} — {str(ev)[:200]}")
+
+        # Register debug listeners for agent-related events
+        for evt in ("agent_state_changed", "speech_created"):
+            _debug_events(evt)
+
+    def _extract_text(self, message) -> str:
+        """Extract text from a ChatMessage, handling various content formats."""
+        # Try text_content property first
+        if hasattr(message, "text_content"):
+            text = message.text_content or ""
+            if text.strip():
+                return text.strip()
+
+        # Try iterating content items for text or audio transcript
+        if hasattr(message, "content") and hasattr(message.content, "__iter__"):
+            parts = []
+            for item in message.content:
+                if hasattr(item, "text") and item.text:
+                    parts.append(item.text)
+                elif hasattr(item, "transcript") and item.transcript:
+                    parts.append(item.transcript)
+            if parts:
+                return " ".join(parts).strip()
+
+        # Try content as string
+        if hasattr(message, "content") and isinstance(message.content, str):
+            text = message.content.strip()
+            if text:
+                return text
+
+        return ""
+
+    def _add_agent_entry(self, text: str) -> None:
+        """Add an agent transcript entry, deduplicating if needed."""
+        last = self._last_entry_by_role("agent")
+        if last and last.text == text:
+            return  # exact duplicate, skip
+
+        self._transcript.append(
+            TranscriptEntry(
+                role="agent",
+                text=text,
+                timestamp=datetime.now().isoformat(),
             )
-            self._publish_to_room("agent", text)
-            logger.debug(f"📝 Agent: {text[:120]}")
+        )
+        self._publish_to_room("agent", text, action="add")
+        logger.info(f"📝 Agent: {text[:120]}")
 
     # ── Save transcript (and optional metadata) ─────────────────────────────
 
